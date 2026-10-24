@@ -1,0 +1,93 @@
+{
+  "passed": true,
+  "reference_arithmetic": "Decimal, precision 40; standard-library metric aggregation",
+  "scope": "All seven central scenarios, historical opening states and all twelve point-forecast benchmark fixtures. Monte Carlo calibration is not assessed.",
+  "run_id": "d12d12f84b28449f2713",
+  "forecasts": {
+    "baseline": {
+      "months_checked": 60,
+      "maximum_absolute_difference": 8.771944567944197e-13,
+      "minimum_cash_month": "2024-06",
+      "min_cash": -301.2286687912466,
+      "max_funding_gap": 376.2286687912466,
+      "terminal_cash": 2178.666380922967,
+      "first_gap_month": "2024-04"
+    },
+    "downside": {
+      "months_checked": 60,
+      "maximum_absolute_difference": 1.435420185446046e-12,
+      "minimum_cash_month": "2027-09",
+      "min_cash": -1111.178583929629,
+      "max_funding_gap": 1186.178583929629,
+      "terminal_cash": -275.52034734074516,
+      "first_gap_month": "2024-06"
+    },
+    "sensitivity_capex": {
+      "months_checked": 60,
+      "maximum_absolute_difference": 1.4094894261761692e-12,
+      "minimum_cash_month": "2024-06",
+      "min_cash": -369.77552140758166,
+      "max_funding_gap": 444.77552140758166,
+      "terminal_cash": 2081.903268402311,
+      "first_gap_month": "2024-03"
+    },
+    "sensitivity_delay": {
+      "months_checked": 60,
+      "maximum_absolute_difference": 5.511685483662169e-13,
+      "minimum_cash_month": "2024-09",
+      "min_cash": -429.9569551823855,
+      "max_funding_gap": 504.9569551823855,
+      "terminal_cash": 1661.688249122176,
+      "first_gap_month": "2024-06"
+    },
+    "sensitivity_rate": {
+      "months_checked": 60,
+      "maximum_absolute_difference": 9.085059720281667e-13,
+      "minimum_cash_month": "2024-06",
+      "min_cash": -346.6962877124573,
+      "max_funding_gap": 421.6962877124573,
+      "terminal_cash": 1914.915428668423,
+      "first_gap_month": "2024-04"
+    },
+    "sensitivity_receipts": {
+      "months_checked": 60,
+      "maximum_absolute_difference": 8.771944567944197e-13,
+      "minimum_cash_month": "2024-06",
+      "min_cash": -301.2286687912466,
+      "max_funding_gap": 376.2286687912466,
+      "terminal_cash": 725.4549584058801,
+      "first_gap_month": "2024-04"
+    },
+    "stress": {
+      "months_checked": 60,
+      "maximum_absolute_difference": 1.7198022385890266e-12,
+      "minimum_cash_month": "2028-06",
+      "min_cash": -2979.1790387696205,
+      "max_funding_gap": 3054.1790387696205,
+      "terminal_cash": -2511.787004447896,
+      "first_gap_month": "2024-07"
+    }
+  },
+  "benchmark": {
+    "origins": 840,
+    "adjusted_wins_vs_plan": 8,
+    "aggregate": {
+      "plan": {
+        "predictions": 2520,
+        "mae": 20.677587107149144,
+        "rmse": 25.10869419774732
+      },
+      "last_observation": {
+        "predictions": 2520,
+        "mae": 24.37484279298344,
+        "rmse": 41.42965114601143
+      },
+      "adjusted": {
+        "predictions": 2520,
+        "mae": 10.29109178480733,
+        "rmse": 13.746425891338726
+      }
+    },
+    "maximum_absolute_metric_difference": 1.6e-14
+  }
+}

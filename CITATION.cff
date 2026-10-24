@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, cite the version and include its source commit or archive hash."
+title: "Infra Cashflow Agent"
+type: software
+repository-code: "https://github.com/dmkkazakov/-infra-cashflow-agent"
+authors:
+  - family-names: "Kazakov"
+    given-names: "Dmitry"
+version: "0.1.1"
+date-released: "2026-10-24"
+abstract: "An auditable infrastructure cash-flow forecasting prototype combining a cash-basis ledger, historical deviation corrections, scenario simulation and a bounded optional LLM harness. Demonstrated on synthetic data only."
+keywords:
+  - infrastructure
+  - project finance
+  - cash flow forecasting
+  - agent harness
+  - synthetic data
+license: MIT

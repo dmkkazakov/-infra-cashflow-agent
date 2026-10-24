@@ -1,0 +1,67 @@
+{
+  "artifact_sha256": {
+    "audit.jsonl": "d86a3791c5d13eac3a3ce104819787d0f888c72060d0254d5a5844c154099af2",
+    "forecast_baseline.csv": "37b6bef36d3ef60a885c05f660c4944486845724757f7e321d4152cc5d2186ae",
+    "forecast_downside.csv": "b2b3cf20b7ae2b7cfe0df298ffb0a03bdd11f9a415f7903b9145b891fe808f9b",
+    "forecast_sensitivity_capex.csv": "f10435b4809874d956bf3b92fb815191389599ed0a15c665ce2bd6392f698dc4",
+    "forecast_sensitivity_delay.csv": "d88edec9923c0c46f342c963c3b864b7e71702d9782e0bd0428aee9871fae30f",
+    "forecast_sensitivity_rate.csv": "27c55e5603cde33b4270e91d7147be51085c90c5817a3e2dd203b9a0968bcad8",
+    "forecast_sensitivity_receipts.csv": "a5d1ec12bf10e87f204dc7dc5f0026d4efbad04003e499ba2d1f0b4a7a1d1018",
+    "forecast_stress.csv": "5067a29b49580446141500fb315dc4e7eff50e35945335f85fc6042431685160",
+    "report.json": "4cf998239d7edbec087464a7fe56eadb6ac157813245020be380edd2f2685215",
+    "report.md": "da61c9bf9fa4a7b3ac1a3f5ad77cdc7b5e12e9d4172edeed2239828b523693f4"
+  },
+  "configuration": {
+    "as_of": "2023-12",
+    "horizon": null,
+    "max_model_rounds": 8,
+    "mode": "offline_workflow",
+    "n_simulations": 1000,
+    "objective_sha256": "d66da1e3fa5eb078237f4ceca6c6ef223ddfc88154c2cb02a7cd7589058f3c2c",
+    "planner_endpoint_sha256": null,
+    "planner_model": null,
+    "scenario_definitions": {
+      "baseline": {
+        "name": "baseline"
+      },
+      "downside": {
+        "annual_rate_shift": 0.02,
+        "capex_multiplier": 1.1,
+        "delay_months": 3,
+        "name": "downside",
+        "opex_multiplier": 1.05,
+        "receipts_multiplier": 0.9
+      },
+      "stress": {
+        "annual_rate_shift": 0.04,
+        "capex_multiplier": 1.2,
+        "delay_months": 6,
+        "name": "stress",
+        "opex_multiplier": 1.1,
+        "receipts_multiplier": 0.8
+      }
+    },
+    "seed": 42,
+    "sensitivity_definitions": {
+      "capex": {
+        "capex_multiplier": 1.1,
+        "name": "sensitivity_capex"
+      },
+      "delay": {
+        "delay_months": 3,
+        "name": "sensitivity_delay"
+      },
+      "rate": {
+        "annual_rate_shift": 0.02,
+        "name": "sensitivity_rate"
+      },
+      "receipts": {
+        "name": "sensitivity_receipts",
+        "receipts_multiplier": 0.9
+      }
+    }
+  },
+  "input_sha256": "ff23ca9a83f8c2f76cfc656c0b0b9fc30394e08ca314958e33b4bfe8aa763ed3",
+  "run_id": "d12d12f84b28449f2713",
+  "status": "complete"
+}
