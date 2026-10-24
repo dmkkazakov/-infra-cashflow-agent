@@ -25,6 +25,15 @@ def project():
 
 
 class InputIntegrityTests(unittest.TestCase):
+    def test_zero_historical_draws_and_facility_cannot_hide_positive_opening_balances(self):
+        for balances in ({"opening_debt": 5e-10, "opening_cumulative_drawn": 0.0},
+                         {"opening_debt": 0.0, "opening_cumulative_drawn": 5e-10, "facility_limit": 0.0}):
+            with self.subTest(balances=balances):
+                p = project()
+                p["financing"].update(balances)
+                with self.assertRaisesRegex(ValueError, "Opening"):
+                    validate_project(p)
+
     def test_actual_principal_cannot_be_silently_capped_in_validation(self):
         for recorded in (False, True):
             with self.subTest(recorded=recorded):

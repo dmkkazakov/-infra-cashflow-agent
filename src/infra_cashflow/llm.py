@@ -9,6 +9,7 @@ HTTP transport, not against a live commercial model.
 from __future__ import annotations
 
 import ipaddress
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -54,14 +55,26 @@ class ChatCompletionsPlanner:
 
     def __post_init__(self) -> None:
         self.endpoint = validate_endpoint(self.base_url)
-        if not self.model or len(self.model) > 200:
+        if not isinstance(self.model, str) or not self.model or len(self.model) > 200:
             raise ValueError("An explicit model name of at most 200 characters is required.")
-        if not 0 < self.timeout <= 60:
+        self._validate_request_settings()
+
+    def _validate_request_settings(self) -> None:
+        # Never let http.client include a malformed Authorization value in an
+        # exception: the CLI displays provider errors to the caller.
+        if not isinstance(self.api_key, str) or any(not 33 <= ord(c) <= 126 for c in self.api_key):
+            raise ValueError("API key must contain printable ASCII characters without whitespace.")
+        if (isinstance(self.timeout, bool) or not isinstance(self.timeout, (int, float))
+                or not 0 < self.timeout <= 60):
             raise ValueError("Model timeout must be in (0, 60] seconds.")
+        if (isinstance(self.max_response_bytes, bool) or not isinstance(self.max_response_bytes, int)
+                or self.max_response_bytes <= 0):
+            raise ValueError("Model response size limit must be a positive integer.")
 
     def next_action(self, messages: list[dict], tools: list[dict]) -> dict[str, Any]:
         if not self.allow_network:
             raise PlannerError("Network access requires the explicit --allow-network option.")
+        self._validate_request_settings()
         payload = json.dumps({
             "model": self.model,
             "messages": messages,
@@ -73,9 +86,9 @@ class ChatCompletionsPlanner:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
-        request = urllib.request.Request(self.endpoint, data=payload, headers=headers, method="POST")
-        opener = urllib.request.build_opener(_NoRedirects())
         try:
+            request = urllib.request.Request(self.endpoint, data=payload, headers=headers, method="POST")
+            opener = urllib.request.build_opener(_NoRedirects())
             with opener.open(request, timeout=self.timeout) as response:
                 raw = response.read(self.max_response_bytes + 1)
         except PlannerError:
@@ -84,6 +97,8 @@ class ChatCompletionsPlanner:
             raise PlannerError(f"Model endpoint returned HTTP {exc.code}.") from None
         except (urllib.error.URLError, TimeoutError, OSError):
             raise PlannerError("Model endpoint could not be reached within the configured timeout.") from None
+        except (ValueError, TypeError, http.client.HTTPException):
+            raise PlannerError("Model request could not be encoded or completed safely.") from None
         if len(raw) > self.max_response_bytes:
             raise PlannerError("Model response exceeded the response size limit.")
         try:
@@ -92,7 +107,7 @@ class ChatCompletionsPlanner:
             message = choices[0]["message"]
             if not isinstance(message, dict):
                 raise ValueError("message must be object")
-        except (ValueError, KeyError, IndexError, TypeError):
+        except (ValueError, KeyError, IndexError, TypeError, RecursionError):
             raise PlannerError("Model endpoint returned an invalid Chat Completions response.") from None
         return message
 

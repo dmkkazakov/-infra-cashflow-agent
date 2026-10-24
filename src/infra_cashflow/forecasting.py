@@ -24,6 +24,18 @@ NOISE_FLOORS = {"receipts": 0.05, "capex": 0.06, "opex": 0.04, "tax": 0.05, "mai
 UNOBSERVED_NOISE = {"receipts": 0.12, "capex": 0.10, "opex": 0.08, "tax": 0.10, "maintenance_capex": 0.10}
 
 
+def _check_finite_output(value: Any) -> None:
+    """Keep the direct Python API as strict as the serialized CLI output."""
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("Numerical result is nonfinite; rescale amounts or correct the inputs")
+    if isinstance(value, dict):
+        for item in value.values():
+            _check_finite_output(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _check_finite_output(item)
+
+
 def fit_corrections(project: dict) -> dict:
     """Fit recency-weighted actual/plan multipliers from the supplied prefix.
 
@@ -131,8 +143,11 @@ def _future_rows(project: dict, model: dict, horizon: int, scenario: dict) -> tu
     future = []
     for i in range(1, horizon + 1):
         month = add_months(cutoff, i)
-        source_month = add_months(month, -delay)
-        source = plan.get(source_month, zero) if month_number(source_month) > cutoff_n else zero
+        # During the suspension the source lies before the forecast cutoff.
+        # Do not construct a date there: a valid 1900 forecast can otherwise
+        # fail merely because its unused source month would be in 1899.
+        source_n = month_number(month) - delay
+        source = plan.get(add_months(month, -delay), zero) if source_n > cutoff_n else zero
         contract = plan.get(month, zero)
         row = {"month": month}
         for c in FLOW_COMPONENTS:
@@ -236,9 +251,19 @@ def run_forecast(project: dict, as_of: str | None = None, horizon: int | None = 
         raise ValueError("Scenario annual interest rate must remain in [0,1]")
     point_rows, deferred = _future_rows(p, model, horizon, s)
     point_ledger = cashflow_ledger(point_rows, fin, state)
-    cash_paths, fcf_paths, dscr_paths = _cash_path_simulation(point_rows, fin, state, model, n_simulations, seed)
-    cash_q = np.quantile(cash_paths, (0.1, 0.5, 0.9), axis=0)
-    fcf_q = np.quantile(fcf_paths, (0.1, 0.5, 0.9), axis=0)
+    try:
+        with np.errstate(over="raise", invalid="raise"):
+            cash_paths, fcf_paths, dscr_paths = _cash_path_simulation(point_rows, fin, state, model, n_simulations, seed)
+            cash_q = np.quantile(cash_paths, (0.1, 0.5, 0.9), axis=0)
+            fcf_q = np.quantile(fcf_paths, (0.1, 0.5, 0.9), axis=0)
+            minimum_paths = cash_paths.min(axis=1)
+            min_quantiles = np.quantile(minimum_paths, (0.1, 0.5, 0.9))
+            terminal_q = np.quantile(cash_paths[:, -1], (0.1, 0.5, 0.9))
+            mean_peak_gap = float(np.maximum(fin["minimum_cash"] - minimum_paths, 0.0).mean())
+    except FloatingPointError:
+        raise ValueError("Simulation arithmetic overflow; rescale amounts or correct the inputs") from None
+    if not np.isfinite(cash_paths).all() or not np.isfinite(fcf_paths).all():
+        raise ValueError("Simulation produced nonfinite cash flows; rescale amounts or correct the inputs")
     floor = fin["minimum_cash"]
     probability_below = (cash_paths < floor - 1e-7).mean(axis=0)
     monthly = []
@@ -247,9 +272,6 @@ def run_forecast(project: dict, as_of: str | None = None, horizon: int | None = 
                         "p10_cash": float(cash_q[0, i]), "p50_cash": float(cash_q[1, i]), "p90_cash": float(cash_q[2, i]),
                         "p10_free_cash_flow": float(fcf_q[0, i]), "p50_free_cash_flow": float(fcf_q[1, i]), "p90_free_cash_flow": float(fcf_q[2, i]),
                         "probability_cash_below_floor": float(probability_below[i])})
-    minimum_paths = cash_paths.min(axis=1)
-    min_quantiles = np.quantile(minimum_paths, (0.1, 0.5, 0.9))
-    terminal_q = np.quantile(cash_paths[:, -1], (0.1, 0.5, 0.9))
     point_min = min(row["closing_cash"] for row in monthly)
     operations_start = p.get("operations_start") or next((r["month"] for r in p["baseline"] if r["receipts"] > 0), point_rows[0]["month"])
     # For a project already operating, a suspension itself is an operating risk
@@ -281,12 +303,12 @@ def run_forecast(project: dict, as_of: str | None = None, horizon: int | None = 
         "probability_negative_cash": float((minimum_paths < -1e-7).mean()),
         "p10_min_cash": float(min_quantiles[0]), "p50_min_cash": float(min_quantiles[1]), "p90_min_cash": float(min_quantiles[2]),
         "p10_terminal_cash": float(terminal_q[0]), "p50_terminal_cash": float(terminal_q[1]), "p90_terminal_cash": float(terminal_q[2]),
-        "mean_peak_funding_gap": float(np.maximum(floor - minimum_paths, 0.0).mean()),
+        "mean_peak_funding_gap": mean_peak_gap,
         "deferred_receipts": deferred["receipts"], "deferred_capex": deferred["capex"],
         "deferred_beyond_horizon": deferred,
         "n_simulations": n_simulations, "seed": seed,
     }
-    return {
+    result = {
         "schema_version": "1.0", "project_id": p["project_id"], "synthetic_data": p["synthetic_data"],
         "as_of": p["as_of"], "scenario": s, "model": model,
         "monthly": monthly, "summary": summary, "actual_ledger": actual_ledger,
@@ -306,6 +328,8 @@ def run_forecast(project: dict, as_of: str | None = None, horizon: int | None = 
         },
         "warnings": warnings,
     }
+    _check_finite_output(result)
+    return result
 
 
 def _fcf(row: dict) -> float:
@@ -359,7 +383,11 @@ def backtest(project: dict, min_train: int = 12, horizon: int = 3) -> dict:
                     component_errors[method][c].append(float(predicted[c] - actual[c]))
         for method in methods:
             arr = np.array(by_origin[method])
-            origin["methods"][method] = {"mae": float(np.abs(arr).mean()), "rmse": float(np.sqrt((arr ** 2).mean()))}
+            try:
+                with np.errstate(over="raise", invalid="raise"):
+                    origin["methods"][method] = {"mae": float(np.abs(arr).mean()), "rmse": float(np.sqrt((arr ** 2).mean()))}
+            except FloatingPointError:
+                raise ValueError("Backtest arithmetic overflow; rescale amounts or correct the inputs") from None
         origin_rows.append(origin)
     metrics = {}
     for method in methods:
@@ -367,17 +395,24 @@ def backtest(project: dict, min_train: int = 12, horizon: int = 3) -> dict:
         wape = {}
         for c in FLOW_COMPONENTS:
             denominator = sum(abs(x) for x in component_actuals[c])
-            wape[c] = sum(abs(x) for x in component_errors[method][c]) / denominator if denominator > 1e-12 else None
-        metrics[method] = {
-            "net_cashflow_mae": float(np.abs(arr).mean()),
-            "net_cashflow_rmse": float(np.sqrt((arr ** 2).mean())),
-            "net_cashflow_bias": float(arr.mean()),
-            "absolute_error_sum": float(np.abs(arr).sum()),
-            "squared_error_sum": float((arr ** 2).sum()),
-            "predictions": len(arr),
-            "component_wape": wape,
-        }
-    return {
+            numerator = sum(abs(x) for x in component_errors[method][c])
+            if not math.isfinite(denominator) or not math.isfinite(numerator):
+                raise ValueError("Backtest arithmetic overflow; rescale amounts or correct the inputs")
+            wape[c] = numerator / denominator if denominator > 1e-12 else None
+        try:
+            with np.errstate(over="raise", invalid="raise"):
+                metrics[method] = {
+                    "net_cashflow_mae": float(np.abs(arr).mean()),
+                    "net_cashflow_rmse": float(np.sqrt((arr ** 2).mean())),
+                    "net_cashflow_bias": float(arr.mean()),
+                    "absolute_error_sum": float(np.abs(arr).sum()),
+                    "squared_error_sum": float((arr ** 2).sum()),
+                    "predictions": len(arr),
+                    "component_wape": wape,
+                }
+        except FloatingPointError:
+            raise ValueError("Backtest arithmetic overflow; rescale amounts or correct the inputs") from None
+    result = {
         "project_id": project["project_id"], "synthetic_data": project["synthetic_data"],
         "currency": project["currency"], "amount_unit": project["amount_unit"],
         "target": "prefinancing_free_cash_flow",
@@ -393,3 +428,5 @@ def backtest(project: dict, min_train: int = 12, horizon: int = 3) -> dict:
             "Uncertainty bands are not empirically calibrated or evaluated in this point-forecast experiment.",
         ],
     }
+    _check_finite_output(result)
+    return result

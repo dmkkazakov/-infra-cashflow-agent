@@ -168,11 +168,13 @@ def audit_benchmark(released):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--demo-dir", type=Path, default=ROOT / "results/demo",
+                        help="Directory containing latest.json and the forecast run to audit")
     parser.add_argument("--output", type=Path, default=ROOT / "results/independent_audit.json")
     args = parser.parse_args()
     project = json.loads((ROOT / "examples/demo_project.json").read_text())
-    latest = json.loads((ROOT / "results/demo/latest.json").read_text())
-    report = json.loads((ROOT / "results/demo" / latest["run_id"] / "report.json").read_text())
+    latest = json.loads((args.demo_dir / "latest.json").read_text())
+    report = json.loads((args.demo_dir / latest["run_id"] / "report.json").read_text())
     benchmark = json.loads((ROOT / "results/benchmark.json").read_text())
     result = {"passed": True, "reference_arithmetic": "Decimal, precision 40; standard-library metric aggregation",
               "scope": "All seven central scenarios, historical opening states and all twelve point-forecast benchmark fixtures. Monte Carlo calibration is not assessed.",

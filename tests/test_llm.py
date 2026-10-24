@@ -1,4 +1,5 @@
 import io
+import http.client
 import json
 import unittest
 import urllib.error
@@ -54,6 +55,56 @@ class TestPlannerTransport(unittest.TestCase):
         with patch("urllib.request.build_opener", return_value=opener), self.assertRaises(PlannerError) as caught:
             planner.next_action([], [])
         self.assertEqual(str(caught.exception), "Model endpoint returned HTTP 401.")
+
+    def test_malformed_api_key_is_rejected_without_exposing_its_value(self):
+        for key in ("DUMMY_SECRET\n", "DUMMY_SECRET\r", "DUMMY_SECRET ü", "DUMMY_SECRET\t"):
+            with self.subTest(key=key), patch("urllib.request.build_opener") as opener:
+                with self.assertRaises(ValueError) as caught:
+                    ChatCompletionsPlanner("http://127.0.0.1:1/v1", "model", api_key=key, allow_network=True)
+                self.assertNotIn("DUMMY_SECRET", str(caught.exception))
+                opener.assert_not_called()
+        planner = ChatCompletionsPlanner("http://127.0.0.1:1/v1", "model", allow_network=True)
+        planner.api_key = "DUMMY_SECRET\n"
+        with self.assertRaises(ValueError) as caught:
+            planner.next_action([], [])
+        self.assertNotIn("DUMMY_SECRET", str(caught.exception))
+
+    def test_transport_encoding_errors_are_sanitized(self):
+        errors = [ValueError("Invalid header value DUMMY_SECRET"),
+                  UnicodeEncodeError("ascii", "DUMMY_SECRET ü", 13, 14, "encoding failed"),
+                  http.client.InvalidURL("DUMMY_SECRET")]
+        for error in errors:
+            with self.subTest(error=type(error).__name__):
+                opener = Mock()
+                opener.open.side_effect = error
+                planner = ChatCompletionsPlanner("https://example.test/v1", "model", allow_network=True)
+                with patch("urllib.request.build_opener", return_value=opener), self.assertRaises(PlannerError) as caught:
+                    planner.next_action([], [])
+                self.assertNotIn("DUMMY_SECRET", str(caught.exception))
+
+    def test_response_limit_requires_a_positive_integer(self):
+        for limit in (-2, -1, 0, True, False, 1.5, None):
+            with self.subTest(limit=limit), self.assertRaises(ValueError):
+                ChatCompletionsPlanner("https://example.test/v1", "model", max_response_bytes=limit)
+
+    def test_timeout_requires_a_bounded_real_number(self):
+        for timeout in (True, False, None, "30", 0, -1, 61, float("inf"), float("nan"), 10**1000):
+            with self.subTest(timeout=timeout), self.assertRaises(ValueError):
+                ChatCompletionsPlanner("https://example.test/v1", "model", timeout=timeout)
+
+    def test_model_name_requires_text(self):
+        for model in (None, 123, [], "", "x" * 201):
+            with self.subTest(model=model), self.assertRaises(ValueError):
+                ChatCompletionsPlanner("https://example.test/v1", model)
+
+    def test_deeply_nested_response_is_a_protocol_error(self):
+        # The body is below the byte limit but exceeds the JSON parser's depth.
+        raw = b"[" * 20_000 + b"0" + b"]" * 20_000
+        opener = Mock()
+        opener.open.return_value = io.BytesIO(raw)
+        planner = ChatCompletionsPlanner("https://example.test/v1", "model", allow_network=True)
+        with patch("urllib.request.build_opener", return_value=opener), self.assertRaises(PlannerError):
+            planner.next_action([], [])
 
 
 if __name__ == "__main__":

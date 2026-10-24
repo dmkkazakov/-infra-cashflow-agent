@@ -19,4 +19,5 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: python scripts/audit_release.py
       - run: python -m infra_cashflow demo --output outputs/demo --simulations 200
+      - run: python scripts/audit_release.py --demo-dir outputs/demo --output outputs/demo-audit.json
       - run: python -m infra_cashflow evaluate examples/demo_project.json --output outputs/evaluation.json

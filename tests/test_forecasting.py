@@ -8,8 +8,21 @@ from unittest.mock import patch
 
 import numpy as np
 
-from infra_cashflow.data import make_demo_project, observed_project, validate_project
+from infra_cashflow.data import AMOUNT_FIELDS, add_months, make_demo_project, observed_project, validate_project
 from infra_cashflow.forecasting import _cash_path_simulation, backtest, fit_corrections, run_forecast
+
+
+def small_cash_fixture(months=6, observed=3, start="2022-01"):
+    baseline = [{"month": add_months(start, i), **{c: 0.0 for c in AMOUNT_FIELDS}} for i in range(months)]
+    return {
+        "schema_version": "1.0", "project_id": "numerical-boundary", "synthetic_data": True,
+        "currency": "RUB", "amount_unit": "million", "baseline_vintage": start,
+        "as_of": add_months(start, observed - 1), "baseline": baseline,
+        "actuals": [{**r, "debt_draw": 0.0, "interest": 0.0} for r in baseline],
+        "financing": {"opening_cash": 0.0, "opening_debt": 0.0, "opening_cumulative_drawn": 0.0,
+                      "facility_limit": 0.0, "minimum_cash": 0.0, "annual_interest_rate": 0.0,
+                      "availability_end": add_months(start, months - 1)},
+    }
 
 
 class ForecastEvidenceTests(unittest.TestCase):
@@ -59,6 +72,34 @@ class ForecastEvidenceTests(unittest.TestCase):
             self.assertLessEqual(row["p50_cash"], row["p90_cash"])
             self.assertTrue(0 <= row["probability_cash_below_floor"] <= 1)
 
+    def test_direct_forecast_rejects_simulation_and_reduction_overflow(self):
+        # The point ledger is finite in both cases. Random receipts overflow
+        # in the first; aggregation of individually finite gaps in the second.
+        for component, amount in (("receipts", 1.5e308), ("capex", 1e306)):
+            with self.subTest(component=component):
+                p = small_cash_fixture(months=2, observed=1)
+                p["baseline"][1][component] = amount
+                with self.assertRaisesRegex(ValueError, "overflow|nonfinite"):
+                    run_forecast(p, horizon=1, n_simulations=1000, seed=42)
+
+    def test_backtest_rejects_overflowing_squared_errors(self):
+        p = small_cash_fixture()
+        for r in p["actuals"][3:]:
+            r["receipts"] = 1e200
+        with self.assertRaisesRegex(ValueError, "overflow|nonfinite"):
+            backtest(p, min_train=3, horizon=1)
+
+    def test_backtest_wape_cannot_become_zero_from_an_infinite_denominator(self):
+        p = small_cash_fixture()
+        for r in p["baseline"]:
+            r.update(receipts=9.9e307, opex=9.9e307)
+        for r in p["actuals"]:
+            r.update(receipts=1e308, opex=1e308)
+        # Net cash flow is zero, so only the component aggregation overflows.
+        # Without an intermediate check its true nonzero WAPE becomes 0/Inf.
+        with self.assertRaisesRegex(ValueError, "overflow|nonfinite"):
+            backtest(p, min_train=3, horizon=1)
+
     def test_reproducible_same_seed(self):
         a = run_forecast(self.project, horizon=12, n_simulations=50, seed=33)
         b = run_forecast(self.project, horizon=12, n_simulations=50, seed=33)
@@ -77,6 +118,16 @@ class ForecastEvidenceTests(unittest.TestCase):
             self.assertAlmostEqual(total, sum(r[c] for r in base["monthly"]), places=8)
         self.assertGreater(delayed["summary"]["deferred_receipts"], 0.0)
         self.assertEqual([r["scheduled_principal"] for r in base["monthly"]], [r["scheduled_principal"] for r in delayed["monthly"]])
+
+    def test_delay_at_first_supported_month_has_zero_suspension_flows(self):
+        p = small_cash_fixture(months=4, observed=1, start="1900-01")
+        for i, row in enumerate(p["baseline"]):
+            row["receipts"] = i * 10.0
+        result = run_forecast(p, horizon=5, n_simulations=20, scenario={"delay_months": 3})
+        self.assertEqual([r["month"] for r in result["monthly"]],
+                         ["1900-02", "1900-03", "1900-04", "1900-05", "1900-06"])
+        self.assertEqual([r["receipts"] for r in result["monthly"]], [0.0, 0.0, 0.0, 10.0, 20.0])
+        self.assertEqual(result["summary"]["deferred_receipts"], 30.0)
 
     def test_initial_state_matches_last_actual(self):
         result = run_forecast(self.project, horizon=12, n_simulations=20)

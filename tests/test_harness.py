@@ -5,7 +5,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from infra_cashflow.harness import ForecastHarness, HarnessError, render_report, validate_tool_call, verify_accounting
+from infra_cashflow import harness as harness_module
+from infra_cashflow.harness import (ForecastHarness, HarnessError, SCENARIOS, SENSITIVITY_SCENARIOS,
+                                   render_report, validate_tool_call, verify_accounting)
+from infra_cashflow.llm import PlannerError
 
 
 def fixture_report():
@@ -111,6 +114,106 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "complete")
         self.assertEqual(json.loads((retry.output_path / "manifest.json").read_text())["status"], "complete")
         self.assertFalse(failure_path.exists())
+
+    def test_same_instance_retry_resets_attempt_state(self):
+        planner = Mock(model="mock-model", endpoint="https://example.test/v1/chat/completions")
+        planner.next_action.side_effect = [
+            response("run_scenario", {"scenario": "downside"}, "a"),
+            PlannerError("Temporary provider error"),
+        ]
+        harness = self.harness(planner=planner)
+        with self.assertRaises(PlannerError):
+            harness.run()
+        planner.next_action.side_effect = [
+            response("run_scenario", {"scenario": "downside"}, "a"),
+            response("diagnose_driver", {"driver": "rate"}, "b"),
+            response("run_scenario", {"scenario": "stress"}, "c"),
+            response("finalize", {}, "d"),
+        ]
+
+        result = harness.run()
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(harness.tool_count, 4)
+        self.assertEqual(self.forecast.call_count, 6)
+        self.assertNotIn("run_failed", [event["operation"] for event in harness.events])
+        self.assertFalse((harness.output_path / "failure.json").exists())
+
+    def test_failed_pointer_write_does_not_leave_a_complete_cache(self):
+        harness = self.harness()
+        original_write = harness_module._atomic_write
+
+        def fail_pointer(root, name, data):
+            if name == "latest.json":
+                raise OSError("Simulated pointer write failure")
+            original_write(root, name, data)
+
+        with patch("infra_cashflow.harness._atomic_write", side_effect=fail_pointer), self.assertRaises(OSError):
+            harness.run()
+        self.assertFalse((harness.output_path / "manifest.json").exists())
+        self.assertTrue((harness.output_path / "failure.json").exists())
+
+        result = harness.run()
+
+        self.assertEqual(result["status"], "complete")
+        self.assertFalse((harness.output_path / "failure.json").exists())
+        self.assertEqual(self.harness().run(), result)
+
+    def test_scenario_snapshot_and_returned_result_do_not_share_mutable_state(self):
+        harness = self.harness()
+        initial_id = harness.run_id
+        with patch.dict(SCENARIOS["downside"], {"receipts_multiplier": 0.5}), \
+                patch.dict(SENSITIVITY_SCENARIOS["rate"], {"annual_rate_shift": 0.30}):
+            result = harness.run()
+        used = {call.kwargs["scenario"]["name"]: call.kwargs["scenario"]
+                for call in self.forecast.call_args_list}
+        self.assertEqual(used["downside"]["receipts_multiplier"], 0.9)
+        self.assertEqual(used["sensitivity_rate"]["annual_rate_shift"], 0.02)
+        self.assertEqual(harness.run_id, initial_id)
+        result["configuration"]["scenario_definitions"]["downside"]["receipts_multiplier"] = 0.4
+        result["forecasts"]["baseline"]["summary"]["min_cash"] = 0
+        self.assertEqual(harness.run_config["scenario_definitions"]["downside"]["receipts_multiplier"], 0.9)
+        self.assertEqual(harness.reports["baseline"]["summary"]["min_cash"], 16.0)
+        self.assertEqual(harness.run()["forecasts"]["baseline"]["summary"]["min_cash"], 16.0)
+
+    def test_mutating_run_inputs_requires_a_new_instance(self):
+        changes = [
+            lambda h: h.project["actuals"][0].update(receipts=2),
+            lambda h: setattr(h, "horizon", 24),
+            lambda h: setattr(h, "objective", "Different task"),
+            lambda h: h.run_config["scenario_definitions"]["downside"].update(receipts_multiplier=0.5),
+            lambda h: setattr(h, "planner", Mock(model="other-model")),
+        ]
+        for change in changes:
+            with self.subTest(change=change):
+                harness = self.harness()
+                change(harness)
+                with self.assertRaisesRegex(HarnessError, "inputs or configuration changed"):
+                    harness.run()
+        self.forecast.assert_not_called()
+
+    def test_corrupt_or_incomplete_cache_is_rejected_without_recalculation(self):
+        harness = self.harness()
+        harness.run()
+        manifest = harness.output_path / "manifest.json"
+        original = json.loads(manifest.read_text())
+        missing_csv = copy.deepcopy(original)
+        del missing_csv["artifact_sha256"]["forecast_sensitivity_rate.csv"]
+        invalid = [[], {}, {**original, "artifact_sha256": {}},
+                   {**original, "artifact_sha256": []},
+                   {**original, "input_sha256": "different"}, missing_csv]
+        calls_before = self.forecast.call_count
+        for value in invalid:
+            with self.subTest(manifest=value):
+                manifest.write_text(json.dumps(value))
+                with self.assertRaisesRegex(HarnessError, "Cached artifacts are incomplete or invalid"):
+                    self.harness().run()
+        self.assertEqual(self.forecast.call_count, calls_before)
+
+    def test_explicit_empty_or_nontext_cutoff_is_not_replaced_by_default(self):
+        for cutoff in ("", False, 0):
+            with self.subTest(cutoff=cutoff), self.assertRaises(ValueError):
+                self.harness(as_of=cutoff)
 
     def test_invalid_cash_identity_prevents_success_artifact(self):
         broken = fixture_report()

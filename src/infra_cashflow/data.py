@@ -52,6 +52,21 @@ def _number(value: Any, name: str, *, minimum: float = 0.0) -> float:
     return n
 
 
+def _exceeds_balance(amount: float, balance: float, scale: float) -> bool:
+    """Compare positive balances without treating zero as available funding."""
+    if amount <= balance:
+        return False
+    if balance == 0.0:
+        return True
+    # Up to 600 monthly rows can accumulate rounding in debt/draw balances.
+    # Four ULP per row, measured at the historical financing scale, cover
+    # that arithmetic and can be reconstructed from a resumed closing_state.
+    # The relative cap prevents large historic draws from excusing a material
+    # overpayment of a small remaining balance. No fixed currency allowance.
+    tolerance = min(4 * 600 * math.ulp(scale), 1e-9 * max(amount, balance))
+    return amount - balance > tolerance
+
+
 def _validate_rows(rows: Any, name: str, *, baseline: bool) -> None:
     if not isinstance(rows, list) or not rows:
         raise ValueError(f"{name} must be a nonempty list of monthly rows")
@@ -126,9 +141,12 @@ def validate_project(project: dict) -> dict:
     if rate > 1.0:
         raise ValueError("annual_interest_rate must be a fraction in [0,1], not a percentage")
     month_number(fin.get("availability_end"))
-    if fin["opening_debt"] > fin["opening_cumulative_drawn"] + 1e-9:
+    debt = float(fin["opening_debt"])
+    drawn = float(fin["opening_cumulative_drawn"])
+    limit = float(fin["facility_limit"])
+    if _exceeds_balance(debt, drawn, drawn):
         raise ValueError("Opening debt cannot exceed cumulative historical draws")
-    if fin["opening_cumulative_drawn"] > fin["facility_limit"] + 1e-9:
+    if _exceeds_balance(drawn, limit, limit):
         raise ValueError("Opening cumulative draws exceed the nonrevolving facility limit")
     observed = [r for r in actuals if month_number(r["month"]) <= as_of]
     # Validate only the observed financing prefix; withheld future outcomes

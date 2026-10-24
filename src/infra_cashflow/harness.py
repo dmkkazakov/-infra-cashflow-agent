@@ -232,7 +232,7 @@ def validate_tool_call(call: dict) -> tuple[str, dict, str]:
         raise HarnessError("Planner arguments must be a JSON string of at most 2048 characters.")
     try:
         arguments = json.loads(raw, parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         raise HarnessError("Planner arguments are not valid finite JSON.") from None
     if not isinstance(arguments, dict):
         raise HarnessError("Planner arguments must be an object.")
@@ -242,7 +242,7 @@ def validate_tool_call(call: dict) -> tuple[str, dict, str]:
             raise HarnessError("Only predefined downside/stress scenarios can be requested.")
     elif name == "diagnose_driver":
         if (set(arguments) != {"driver"} or not isinstance(arguments["driver"], str)
-                or arguments["driver"] not in SENSITIVITY_SCENARIOS):
+                or arguments["driver"] not in {"delay", "capex", "receipts", "rate"}):
             raise HarnessError("Only predefined delay/capex/receipts/rate sensitivities can be requested.")
     elif name == "finalize":
         if arguments:
@@ -278,8 +278,11 @@ class ForecastHarness:
                  horizon: int | None = None, n_simulations: int = 1000, seed: int = 42,
                  planner=None, objective: str = "Assess infrastructure-project liquidity risk.",
                  max_model_rounds: int = 8):
+        if not isinstance(project, dict):
+            raise ValueError("Project must be a JSON object.")
         self.project = copy.deepcopy(project)
-        self.as_of = as_of or project.get("as_of")
+        self.as_of = project.get("as_of") if as_of is None else as_of
+        month_number(self.as_of)
         self.horizon = horizon
         self.n_simulations = n_simulations
         self.seed = seed
@@ -301,28 +304,30 @@ class ForecastHarness:
         self.run_config = {
             "as_of": self.as_of, "horizon": horizon, "n_simulations": n_simulations,
             "seed": seed, "mode": "llm_planned" if planner is not None else "offline_workflow",
-            "scenario_definitions": SCENARIOS,
-            "sensitivity_definitions": SENSITIVITY_SCENARIOS,
+            "scenario_definitions": copy.deepcopy(SCENARIOS),
+            "sensitivity_definitions": copy.deepcopy(SENSITIVITY_SCENARIOS),
             "planner_model": getattr(planner, "model", None), "max_model_rounds": max_model_rounds,
             "planner_endpoint_sha256": hashlib.sha256(str(getattr(planner, "endpoint", "")).encode()).hexdigest() if planner is not None else None,
             "objective_sha256": hashlib.sha256(objective.encode()).hexdigest(),
         }
         self.input_hash = content_hash(self.project)
+        self._configuration_hash = content_hash(self.run_config)
+        self._planner_tools = copy.deepcopy(PLANNER_TOOLS)
         self.code_hash = source_hash()
         self.run_id = content_hash({"input": self.input_hash, "config": self.run_config, "code": self.code_hash})[:20]
         self.output_parent = Path(output_dir).expanduser().resolve()
         self.output_path = self.output_parent / self.run_id
 
     def _event(self, operation: str, **details) -> None:
-        self.events.append({"sequence": len(self.events) + 1, "operation": operation, **details})
+        self.events.append({"sequence": len(self.events) + 1, "operation": operation, **copy.deepcopy(details)})
 
     def _scenario(self, key: str) -> dict:
         if key in self.reports:
             self._event("reuse_verified_scenario", scenario=key)
             return self.reports[key]["summary"]
-        scenario = SCENARIOS.get(key)
+        scenario = self.run_config["scenario_definitions"].get(key)
         if scenario is None:
-            scenario = next((value for value in SENSITIVITY_SCENARIOS.values() if value["name"] == key), None)
+            scenario = next((value for value in self.run_config["sensitivity_definitions"].values() if value["name"] == key), None)
         if scenario is None:
             raise HarnessError("Unknown scenario.")
         self._event("run_forecast", scenario=key, input_sha256=self.input_hash,
@@ -341,11 +346,12 @@ class ForecastHarness:
         return report["summary"]
 
     def _diagnose(self, driver: str) -> dict:
-        scenario_key = SENSITIVITY_SCENARIOS[driver]["name"]
+        scenario = self.run_config["sensitivity_definitions"][driver]
+        scenario_key = scenario["name"]
         summary = self._scenario(scenario_key)
         baseline = self.reports["baseline"]["summary"]
         comparison = {
-            "driver": driver, "assumptions": SENSITIVITY_SCENARIOS[driver],
+            "driver": driver, "assumptions": copy.deepcopy(scenario),
             "comparison": "One-factor model sensitivity; not an identified causal effect.",
             "delta_min_cash_vs_baseline": summary["min_cash"] - baseline["min_cash"],
             "delta_terminal_cash_vs_baseline": summary["terminal_cash"] - baseline["terminal_cash"],
@@ -366,12 +372,12 @@ class ForecastHarness:
                 "objective": self.objective,
                 "baseline_summary": self.reports["baseline"]["summary"],
                 "required_scenarios": ["downside", "stress"],
-                "available_diagnostics": SENSITIVITY_SCENARIOS,
+                "available_diagnostics": self.run_config["sensitivity_definitions"],
                 "data_notice": "Summary values derive from local data; no raw contracts/history are sent.",
             })}]
         for round_number in range(1, self.max_model_rounds + 1):
             self._event("planner_request", round=round_number)
-            message = self.planner.next_action(messages, PLANNER_TOOLS)
+            message = self.planner.next_action(messages, copy.deepcopy(self._planner_tools))
             calls = message.get("tool_calls") if isinstance(message, dict) else None
             if not isinstance(calls, list) or len(calls) != 1:
                 raise HarnessError("Planner must return exactly one allowlisted tool call per round.")
@@ -401,21 +407,92 @@ class ForecastHarness:
             messages.append({"role": "tool", "tool_call_id": call_id, "content": canonical_json(result)})
         raise HarnessError("Planner exceeded its bounded round budget before completing required checks.")
 
+    def _assert_inputs_unchanged(self) -> None:
+        """Changing a run's inputs requires a new instance and a new run ID."""
+        try:
+            current = {
+                **self.run_config, "as_of": self.as_of, "horizon": self.horizon,
+                "n_simulations": self.n_simulations, "seed": self.seed,
+                "mode": "llm_planned" if self.planner is not None else "offline_workflow",
+                "planner_model": getattr(self.planner, "model", None),
+                "planner_endpoint_sha256": hashlib.sha256(str(getattr(self.planner, "endpoint", "")).encode()).hexdigest() if self.planner is not None else None,
+                "max_model_rounds": self.max_model_rounds,
+                "objective_sha256": hashlib.sha256(self.objective.encode()).hexdigest(),
+            }
+            unchanged = (content_hash(self.project) == self.input_hash
+                         and content_hash(self.run_config) == self._configuration_hash
+                         and content_hash(current) == self._configuration_hash)
+        except (ValueError, TypeError, AttributeError):
+            unchanged = False
+        if not unchanged:
+            raise HarnessError("Run inputs or configuration changed; create a new harness instance.")
+
+    def _load_cached(self) -> dict | None:
+        manifest_path = self.output_path / "manifest.json"
+        if not manifest_path.exists():
+            return None
+        try:
+            if manifest_path.is_symlink():
+                raise ValueError("symlink")
+            old = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if (not isinstance(old, dict) or old.get("run_id") != self.run_id
+                    or old.get("status") != "complete" or old.get("input_sha256") != self.input_hash
+                    or old.get("configuration") != self.run_config):
+                raise ValueError("manifest identity")
+            hashes = old.get("artifact_sha256")
+            required = {"report.json", "report.md", "audit.jsonl",
+                        "forecast_baseline.csv", "forecast_downside.csv", "forecast_stress.csv"}
+            if not isinstance(hashes, dict) or not required <= set(hashes):
+                raise ValueError("missing checksums")
+            for name, expected_digest in hashes.items():
+                if (not isinstance(name, str) or Path(name).name != name
+                        or not isinstance(expected_digest, str) or len(expected_digest) != 64
+                        or any(c not in "0123456789abcdef" for c in expected_digest)):
+                    raise ValueError("invalid checksum entry")
+                artifact = self.output_path / name
+                if (artifact.is_symlink() or not artifact.is_file()
+                        or hashlib.sha256(artifact.read_bytes()).hexdigest() != expected_digest):
+                    raise ValueError("artifact mismatch")
+            result = json.loads((self.output_path / "report.json").read_text(encoding="utf-8"))
+            if (not isinstance(result, dict) or result.get("run_id") != self.run_id
+                    or result.get("status") != "complete" or result.get("as_of") != self.as_of
+                    or result.get("configuration") != self.run_config
+                    or result.get("mode") != self.run_config["mode"]):
+                raise ValueError("report identity")
+            provenance = result.get("provenance", {})
+            if (not isinstance(provenance, dict) or provenance.get("input_sha256") != self.input_hash
+                    or provenance.get("package_source_sha256") != self.code_hash):
+                raise ValueError("report provenance")
+            forecasts, diagnostics = result.get("forecasts"), result.get("diagnostics")
+            sensitivity = self.run_config["sensitivity_definitions"]
+            if (not isinstance(forecasts, dict) or not isinstance(diagnostics, dict)
+                    or not diagnostics or not set(diagnostics) <= set(sensitivity)):
+                raise ValueError("report structure")
+            expected_forecasts = {"baseline", "downside", "stress"}
+            expected_forecasts.update(sensitivity[driver]["name"] for driver in diagnostics)
+            if (set(forecasts) != expected_forecasts
+                    or (self.planner is None and set(diagnostics) != set(sensitivity))):
+                raise ValueError("missing scenario")
+            required.update(f"forecast_{name}.csv" for name in forecasts)
+            if set(hashes) != required:
+                raise ValueError("incomplete manifest")
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
+            raise HarnessError("Cached artifacts are incomplete or invalid; the run was not reused.") from None
+        return result
+
     def run(self) -> dict:
+        self._assert_inputs_unchanged()
         if self.output_path.is_symlink():
             raise HarnessError("Run output directory cannot be a symlink.")
-        if (self.output_path / "manifest.json").exists():
-            old = json.loads((self.output_path / "manifest.json").read_text())
-            if old.get("run_id") == self.run_id and old.get("status") == "complete":
-                for name, expected_digest in old["artifact_sha256"].items():
-                    if Path(name).name != name:
-                        raise HarnessError("Manifest contains an invalid artifact path.")
-                    artifact = self.output_path / name
-                    if artifact.is_symlink() or hashlib.sha256(artifact.read_bytes()).hexdigest() != expected_digest:
-                        raise HarnessError("Existing artifact digest does not match its manifest.")
-                result = json.loads((self.output_path / "report.json").read_text(encoding="utf-8"))
-                self._publish_success()
-                return result
+        cached = self._load_cached()
+        if cached is not None:
+            self._publish_success()
+            return cached
+        # An unsuccessful attempt may have consumed tool IDs or computed only
+        # part of the scenario set. A retry starts with clean attempt state.
+        self.reports, self.checks, self.diagnostics = {}, {}, {}
+        self.events, self.seen_call_ids = [], set()
+        self.tool_count = 0
         try:
             validation = validate_project({**self.project, "as_of": self.as_of})
             self._event("validate_project", result=validation)
@@ -423,7 +500,7 @@ class ForecastHarness:
             if self.planner is None:
                 self._scenario("downside")
                 self._scenario("stress")
-                for driver in SENSITIVITY_SCENARIOS:
+                for driver in self.run_config["sensitivity_definitions"]:
                     self._diagnose(driver)
             else:
                 self._plan()
@@ -432,6 +509,9 @@ class ForecastHarness:
             self._persist(result)
             return result
         except Exception as exc:
+            # A failure while publishing the final pointer must not leave a
+            # complete marker whose audit checksum is about to become stale.
+            (self.output_path / "manifest.json").unlink(missing_ok=True)
             self._event("run_failed", error_type=type(exc).__name__)
             _atomic_write(self.output_path, "audit.jsonl", self._audit_text())
             _atomic_write(self.output_path, "failure.json", canonical_json({
@@ -440,6 +520,7 @@ class ForecastHarness:
             raise
 
     def _build_result(self, validation: dict) -> dict:
+        self._assert_inputs_unchanged()
         claims = []
         for scenario, report in self.reports.items():
             for key in ("min_cash", "terminal_cash", "probability_min_cash_below_floor", "min_dscr"):
@@ -447,7 +528,7 @@ class ForecastHarness:
                     claims.append({"scenario": scenario, "metric": key, "value": report["summary"][key],
                                    "evidence": f"/forecasts/{scenario}/summary/{key}"})
         observed = [row for row in self.project.get("actuals", []) if row.get("month", "") <= str(self.as_of)]
-        return {
+        return copy.deepcopy({
             "schema_version": "1.0", "run_id": self.run_id, "status": "complete",
             "mode": self.run_config["mode"], "as_of": self.as_of,
             "money_unit": f"{self.project.get('currency', 'RUB')} million", "synthetic_data": bool(self.project.get("synthetic_data", False)), "validation": validation,
@@ -466,7 +547,7 @@ class ForecastHarness:
                 "Monthly DSCR is illustrative; contractual covenant definitions require separate implementation.",
                 "LLM mode only chooses predefined tool actions; all published figures come from verified code.",
             ],
-        }
+        })
 
     def _audit_text(self) -> str:
         return "".join(canonical_json(event) + "\n" for event in self.events)

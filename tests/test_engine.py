@@ -1,7 +1,8 @@
 import math
 import unittest
 
-from infra_cashflow.engine import cashflow_ledger
+from infra_cashflow.data import add_months
+from infra_cashflow.engine import cashflow_ledger, closing_state
 
 
 def cash_row(month, **values):
@@ -76,6 +77,68 @@ class CashWaterfallTests(unittest.TestCase):
         forecast = cashflow_ledger([cash_row("2022-01", principal=50)], fin)[0]
         self.assertEqual(forecast["principal"], 40.0)
         self.assertEqual(forecast["scheduled_principal"], 50.0)
+
+    def test_zero_debt_cannot_absorb_any_positive_actual_payment(self):
+        for historical_draws in (0.0, 1e15):
+            with self.subTest(historical_draws=historical_draws):
+                fin = terms(opening_cumulative_drawn=historical_draws, facility_limit=1e15)
+                with self.assertRaisesRegex(ValueError, "actual principal"):
+                    cashflow_ledger([cash_row("2022-01", principal=5e-9)], fin, actuals=True)
+
+    def test_decimal_payoff_preserves_actual_payments_and_zero_debt(self):
+        fin = terms(opening_cash=3.3, opening_debt=3.3, opening_cumulative_drawn=3.3,
+                    facility_limit=3.3, annual_interest_rate=0.0)
+        rows = [cash_row("2022-01", principal=2.2, debt_draw=0.0, interest=0.0),
+                cash_row("2022-02", principal=1.1, debt_draw=0.0, interest=0.0)]
+        ledger = cashflow_ledger(rows, fin, actuals=True)
+        self.assertEqual([r["principal"] for r in ledger], [2.2, 1.1])
+        self.assertEqual(ledger[-1]["closing_debt"], 0.0)
+        self.assertEqual(ledger[-1]["closing_cash"], 3.3 - 2.2 - 1.1)
+
+    def test_final_decimal_payment_can_resume_from_closing_state(self):
+        fin = terms(opening_cash=60.0, opening_debt=60.0, opening_cumulative_drawn=60.0,
+                    facility_limit=60.0, annual_interest_rate=0.0)
+        rows = [cash_row(add_months("2022-01", i), principal=0.1, debt_draw=0.0, interest=0.0)
+                for i in range(600)]
+        prefix = cashflow_ledger(rows[:-1], fin, actuals=True)
+        resumed = cashflow_ledger(rows[-1:], fin, closing_state(prefix, fin), actuals=True)
+        complete = cashflow_ledger(rows, fin, actuals=True)
+        self.assertEqual(resumed[-1], complete[-1])
+        self.assertEqual(resumed[-1]["principal"], 0.1)
+        self.assertEqual(resumed[-1]["closing_debt"], 0.0)
+
+    def test_large_historical_draws_cannot_excuse_material_overpayment(self):
+        fin = terms(opening_debt=1e-12, opening_cumulative_drawn=1e15, facility_limit=1e15)
+        with self.assertRaisesRegex(ValueError, "actual principal"):
+            cashflow_ledger([cash_row("2022-01", principal=2e-12)], fin, actuals=True)
+
+    def test_positive_recorded_draw_requires_headroom_and_availability(self):
+        for fin in (terms(facility_limit=0.0),
+                    terms(opening_cumulative_drawn=100.0),
+                    terms(availability_end="2021-12")):
+            with self.subTest(financing=fin):
+                with self.assertRaisesRegex(ValueError, "facility"):
+                    cashflow_ledger([cash_row("2022-01", debt_draw=5e-9, interest=0.0)], fin)
+
+    def test_decimal_draws_keep_recorded_amounts_and_exhaust_headroom(self):
+        fin = terms(facility_limit=0.3, annual_interest_rate=0.0)
+        rows = [cash_row("2022-01", debt_draw=0.1, interest=0.0),
+                cash_row("2022-02", debt_draw=0.2, interest=0.0)]
+        ledger = cashflow_ledger(rows, fin, actuals=True)
+        self.assertEqual([r["debt_draw"] for r in ledger], [0.1, 0.2])
+        self.assertEqual(ledger[-1]["cumulative_drawn"], 0.1 + 0.2)
+        self.assertEqual(ledger[-1]["unused_facility"], 0.0)
+        with self.assertRaisesRegex(ValueError, "facility"):
+            cashflow_ledger([cash_row("2022-03", debt_draw=5e-9, interest=0.0)],
+                            fin, closing_state(ledger, fin), actuals=True)
+
+    def test_zero_initial_draws_and_limit_are_strict(self):
+        for fin, state in (
+                (terms(), {"cash": 0.0, "debt": 5e-10, "cumulative_drawn": 0.0}),
+                (terms(facility_limit=0.0), {"cash": 0.0, "debt": 0.0, "cumulative_drawn": 5e-10})):
+            with self.subTest(state=state):
+                with self.assertRaisesRegex(ValueError, "opening state"):
+                    cashflow_ledger([cash_row("2022-01")], fin, state)
 
     def test_rowwise_cash_and_debt_conservation(self):
         rows = [cash_row("2022-01", capex=80, equity=10), cash_row("2022-02", receipts=50, opex=10, tax=2, maintenance_capex=1, principal=15)]

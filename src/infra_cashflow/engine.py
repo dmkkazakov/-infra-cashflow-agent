@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from typing import Iterable
 
-from .data import AMOUNT_FIELDS, _number, month_number
+from .data import AMOUNT_FIELDS, _exceeds_balance, _number, month_number
 
 
 def initial_state(financing: dict) -> dict:
@@ -36,7 +36,9 @@ def cashflow_ledger(rows: Iterable[dict], financing: dict, initial_state: dict |
     omit both recorded financing fields and use ``actuals=False``. Forecast
     principal is the contractual amount capped by opening debt; an actual
     principal payment above opening debt is rejected rather than silently
-    changed. Lack of cash does not reduce scheduled service.
+    changed. A negative derived balance within accumulated machine rounding
+    is normalized to zero; recorded cash payments themselves never change.
+    Lack of cash does not reduce scheduled service.
     The facility is nonrevolving: principal repayments do not replenish it.
     Debt can be drawn only through availability_end. Draws at month end start
     accruing interest next month. The model has no fees, reserve accounts,
@@ -66,7 +68,7 @@ def cashflow_ledger(rows: Iterable[dict], financing: dict, initial_state: dict |
     available_through = month_number(financing["availability_end"])
     if not all(math.isfinite(x) for x in (cash, debt, drawn, limit, floor, rate)):
         raise ValueError("Ledger state/financing must be finite")
-    if debt < 0 or drawn < debt - 1e-8 or drawn > limit + 1e-8 or floor < 0 or not 0 <= rate <= 1:
+    if _exceeds_balance(debt, drawn, drawn) or _exceeds_balance(drawn, limit, limit) or not 0 <= rate <= 1:
         raise ValueError("Invalid ledger opening state or financing terms")
     result = []
     prior_month = None
@@ -86,7 +88,7 @@ def cashflow_ledger(rows: Iterable[dict], financing: dict, initial_state: dict |
         if recorded and (("debt_draw" in raw) != ("interest" in raw)):
             raise ValueError("Recorded financing must provide both debt_draw and interest")
         actual_payment = actuals or recorded
-        if actual_payment and flow["principal"] > debt_open + 1e-8:
+        if actual_payment and _exceeds_balance(flow["principal"], debt_open, drawn):
             raise ValueError("Recorded actual principal payment exceeds opening debt; actual cash payments cannot be silently capped")
         interest = _number(raw["interest"], f"{raw['month']}.interest") if recorded else debt_open * rate / 12.0
         principal = flow["principal"] if actual_payment else min(flow["principal"], debt_open)
@@ -100,14 +102,18 @@ def cashflow_ledger(rows: Iterable[dict], financing: dict, initial_state: dict |
         headroom = max(limit - drawn, 0.0)
         if "debt_draw" in raw:
             debt_draw = _number(raw["debt_draw"], f"{raw['month']}.debt_draw")
-            if not math.isfinite(debt_draw) or debt_draw < 0 or debt_draw > headroom + 1e-8:
+            if _exceeds_balance(debt_draw, headroom, max(drawn, limit)):
                 raise ValueError("Recorded debt draw exceeds available nonrevolving facility")
-            if current_month > available_through and debt_draw > 1e-8:
+            if current_month > available_through and debt_draw > 0.0:
                 raise ValueError("Recorded debt draw occurs after facility availability ends")
         else:
             debt_draw = min(max(floor - cash_before_draw, 0.0), headroom) if current_month <= available_through else 0.0
         cash = cash_before_draw + debt_draw
         debt = debt_open + debt_draw - principal
+        if debt < 0.0:
+            # Actual principal was checked above against a bounded ULP
+            # allowance. Only its derived rounding residue is normalized.
+            debt = 0.0
         drawn += debt_draw
         service = interest + principal
         ledger_row = {
