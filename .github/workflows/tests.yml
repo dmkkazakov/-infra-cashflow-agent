@@ -21,3 +21,5 @@ jobs:
       - run: python -m infra_cashflow demo --output outputs/demo --simulations 200
       - run: python scripts/audit_release.py --demo-dir outputs/demo --output outputs/demo-audit.json
       - run: python -m infra_cashflow evaluate examples/demo_project.json --output outputs/evaluation.json
+      - run: python scripts/audit_randomized.py
+      - run: python scripts/audit_http_harness.py

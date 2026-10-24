@@ -1,0 +1,72 @@
+{
+  "recorded_on": "2026-10-24",
+  "software_version": "0.1.3",
+  "verified_package_source_sha256": "ea2a45950d71471b9e8eb2f4a526c7e84d0eb2880700b658743c233e4c84f539",
+  "purpose": "Portable reproduction of the additional numerical and scripted HTTP audits reported for release 0.1.3.",
+  "prerequisite": "Install the repository package with python -m pip install -e .; the HTTP audit also requires a permitted loopback socket.",
+  "commands": [
+    "python scripts/audit_randomized.py",
+    "python scripts/audit_http_harness.py"
+  ],
+  "outputs": [
+    "outputs/additional-audits/randomized.json",
+    "outputs/additional-audits/http_harness.json"
+  ],
+  "portability_check": "Both scripts completed from outside the repository working directory using the isolated installed 0.1.3 package.",
+  "prior_audit_statistics_reproduced_exactly": true,
+  "randomized": {
+    "passed": true,
+    "package_version": "0.1.3",
+    "audit_script_sha256": "caf6b97970bd74f20793a68d49032ae65706e8534ca3b70d5faaed1f1a7065eb",
+    "random_seed": 5310,
+    "reference_decimal_precision": 50,
+    "scope": "Separate Decimal arithmetic for synthetic scalar/vector ledgers and rolling-origin metrics; no stochastic calibration or real-project validation.",
+    "random_decimal_scalar_vector": {
+      "cases": 200,
+      "months": 2658,
+      "paths_per_case": 3,
+      "maximum_scalar_decimal_error": 1.8189894035458565e-12,
+      "passed": true
+    },
+    "independent_backtest_grid": {
+      "configurations": 9,
+      "methods": 3,
+      "max_metric_difference": 4.263256414560601e-14,
+      "passed": true
+    },
+    "zero_history_zero_flows": {
+      "one_month_observed": true,
+      "finite_forecast": true,
+      "zero_metrics": true,
+      "null_dscr_and_wape": true
+    }
+  },
+  "http_harness": {
+    "passed": true,
+    "scope": "Real local HTTP transport plus adapter, harness, numerical engine and file publication; scripted stub responses, no live LLM.",
+    "package_version": "0.1.3",
+    "audit_script_sha256": "5020c6a81e8945b97e9921589cc98425bc68901140dc08214722eb5f51420bce",
+    "requests": 5,
+    "tool_calls": 5,
+    "premature_finalization_rejected": true,
+    "mandatory_scenarios_verified": true,
+    "all_accounting_checks_passed": true,
+    "raw_actuals_sent": false,
+    "model_text_or_api_key_persisted": false,
+    "mode": "llm_planned",
+    "forecasts": [
+      "baseline",
+      "downside",
+      "sensitivity_rate",
+      "stress"
+    ],
+    "diagnostics": [
+      "rate"
+    ]
+  },
+  "limitations": [
+    "Synthetic checks only; no real-project forecast validation.",
+    "Stochastic shocks are disabled in the vectorised ledger check; interval calibration is not assessed.",
+    "The HTTP server returns scripted tool calls and uses an explicit dummy key; no live model or external service is contacted."
+  ]
+}

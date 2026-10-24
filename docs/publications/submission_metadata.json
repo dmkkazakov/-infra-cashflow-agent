@@ -1,0 +1,60 @@
+{
+  "version": "0.1.3",
+  "written_date": "2026-10-24",
+  "language": "en",
+  "content_format": "Paper",
+  "content_type": "Preprint",
+  "title": "Infrastructure Cash Flow Forecasting with a Bounded Agent Harness",
+  "subtitle": "Evidence from a Synthetic Benchmark and Software Verification",
+  "abstract": "Infrastructure cash-flow forecasting combines uncertain project performance with contractual financing limits and operational software risks. This paper separates three questions: whether the cash-and-debt ledger is correct, whether an adaptive correction improves the plan, and whether a bounded agent harness preserves valid results through incomplete actions and failed runs. Twelve seeded realisations of three synthetic regimes provide 840 rolling forecast origins and 2,520 origin-target pairs over one- to three-month horizons. For cash flow before financing, the corrected plan achieves mean absolute error of RUB 10.29 million, against RUB 20.68 million for the unchanged plan. Correction improves eight realisations but worsens all four cases with no systematic component bias. A separate scenario calculation produces a peak funding gap of RUB 376.23 million despite positive terminal cash. Verification of software version 0.1.3 includes 96 tests, a separate Decimal recalculation and 200 random configurations. Failure analysis identifies premature completion markers, state retained across retries, mutable configuration aliases, invalid cache reuse and numerical boundary errors. A five-request scripted HTTP test checks rejection of premature finalisation and subsequent completion. No live language-model planner or real-project forecast performance is evaluated. The contribution is reproducible evidence about the estimator and the execution conditions required to retain reviewable financial results, including negative findings.",
+  "keywords": [
+    "infrastructure finance",
+    "cash-flow forecasting",
+    "project finance",
+    "agent harness",
+    "software verification",
+    "scenario analysis",
+    "time-series evaluation"
+  ],
+  "jel_codes": [
+    "C53",
+    "C63",
+    "G32"
+  ],
+  "author": {
+    "name": "Dmitry Kazakov",
+    "email": "dmkkazakov@gmail.com",
+    "affiliation": null
+  },
+  "funding": null,
+  "conflicts_of_interest": null,
+  "ai_disclosure": "OpenAI GPT-6 Astra Pro assisted with literature discovery, software implementation, test development, computational verification support, drafting, editing and translation. Its contribution was substantial. Reported numerical results come from the executable synthetic experiment and the specified arithmetic checks, not from free-form language-model forecasts. The author is responsible for the final manuscript, interpretations and submission. No claim is made that the forecast benchmark evaluated a live language-model planner.",
+  "ssrn_submission_status": "not_submitted",
+  "ssrn_url": null,
+  "ssrn_doi": null,
+  "files": {
+    "english_manuscript": "ssrn_paper.md",
+    "russian_companion": "ssrn_paper_ru.md",
+    "english_pdf": "Infra_Cashflow_SSRN_Dmitry_Kazakov.pdf",
+    "russian_pdf": "Infra_Cashflow_SSRN_Dmitry_Kazakov_RU.pdf"
+  },
+  "code_snapshot": "2fa489170fb4e0700069e6369e80853d221c7cfe",
+  "notes": {
+    "affiliation": "Current institutional affiliation requires author confirmation and must be added consistently to the PDF and submission profile before submission.",
+    "funding": "Requires author confirmation at submission; null does not assert absence of funding.",
+    "conflicts_of_interest": "Requires author confirmation at submission; null does not assert absence of competing interests.",
+    "author_review": "The author must review the final manuscript and confirm authorship, accuracy and rights when submitting.",
+    "language": "The English PDF is intended for SSRN. The Russian text and PDF are companion versions for readers.",
+    "metadata_consistency": "Title, subtitle, abstract, keywords, JEL codes and AI disclosure are copied from ssrn_paper.md. Keep the PDF and submission fields aligned when revising.",
+    "provenance": "Software version 0.1.3; frozen results retain version 0.1.1 provenance as explained in the manuscript. No SSRN posting, DOI or peer review is claimed."
+  },
+  "policy_sources": {
+    "submission_guidelines": "https://www.elsevier.support/ssrn/answer/get-started",
+    "language": "https://www.elsevier.support/ssrn/answer/does-ssrn-accept-nonenglish-submissions",
+    "affiliation": "https://www.elsevier.support/ssrn/answer/affiliation",
+    "ai_policy": "https://www.elsevier.support/ssrn/answer/AI",
+    "pdf_requirements": "https://www.elsevier.support/ssrn/answer/pdf-issues",
+    "classifications": "https://www.elsevier.support/ssrn/answer/classification-distribution",
+    "submission_form_guide": "https://supportcontent.elsevier.com/Support%20Hub/SSRN/SSRN_NewSubmissionForm.pdf"
+  }
+}

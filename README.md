@@ -1,5 +1,7 @@
 # Infra Cashflow Agent
 
+[Русский](README.md) | [English](README.en.md)
+
 Прогноз месячного денежного потока инфраструктурного проекта: поступления, расходы, обслуживание долга и потребность в финансировании.
 
 Проект может хорошо зарабатывать за весь срок жизни и остаться без денег посреди стройки. Подрядчик, к сожалению, не принимает оплату положительным NPV. Поэтому здесь важен каждый месяц, а не только итоговая сумма.
@@ -101,11 +103,17 @@ closing_debt = opening_debt + debt_draw - principal
 Полное воспроизведение расчётов из статей:
 
 ```bash
-python scripts/generate_demo.py --benchmark --benchmark-output results/benchmark.json
-python -m infra_cashflow demo --output results/demo --simulations 1000 --seed 42
-python scripts/audit_release.py
 python -m unittest discover -s tests -v
+python scripts/generate_demo.py --output outputs/reproduction/demo_project.json --benchmark --benchmark-output outputs/reproduction/benchmark.json
+python -m infra_cashflow demo --output outputs/reproduction/demo --simulations 1000 --seed 42
+python scripts/audit_release.py --demo-dir outputs/reproduction/demo --output outputs/reproduction/audit.json
+python scripts/audit_randomized.py
+python scripts/audit_http_harness.py
 ```
+
+Новые результаты сохраняются в `outputs/reproduction` и `outputs/additional-audits`. Генератор повторяет benchmark отдельно; Decimal-проверка сверяет свежий прогноз и замороженный benchmark из `results/benchmark.json`.
+
+Два дополнительных скрипта повторяют арифметическую проверку случайных конфигураций, сравнение backtest на девяти сочетаниях параметров и локальный HTTP-тест из пяти запросов. Они записывают результаты в `outputs/additional-audits/`. HTTP-проверка использует loopback-сервер с заданными ответами и фиктивный ключ. [Сводка и контрольные суммы скриптов](docs/verification/extra_audits_v013.json) фиксируют границы этих проверок.
 
 По умолчанию независимая проверка читает `results/demo/latest.json`. Чтобы проверить свежий прогноз и сохранить эталонные файлы, можно использовать отдельный каталог:
 
@@ -140,12 +148,14 @@ python -m infra_cashflow run examples/demo_project.json --mode llm --allow-netwo
 
 - [Русская статья: cash flow и первый опыт с harness](docs/publications/habr_article.md).
 - [Английская исследовательская рукопись](docs/publications/ssrn_paper.md), [PDF](docs/publications/Infra_Cashflow_SSRN_Dmitry_Kazakov.pdf).
+- [Русская версия исследования](docs/publications/ssrn_paper_ru.md), [PDF](docs/publications/Infra_Cashflow_SSRN_Dmitry_Kazakov_RU.pdf).
+- [Все публикационные материалы и статус подготовки к SSRN](docs/publications/README.md).
 - [Формат данных](docs/DATA_DICTIONARY.md) и [JSON Schema](docs/project.schema.json).
 - [Описание модели и её ограничений](docs/MODEL_CARD.md).
 
 Исходный код находится в `src/infra_cashflow`, тесты в `tests`, данные примера в `examples`, скрипты воспроизведения в `scripts`.
 
-Для пересборки графиков и версий статей в Word установите дополнительные зависимости: `python -m pip install -e ".[publication]"`. Затем запустите `python scripts/render_figures.py` и `python scripts/build_publications.py`. Экспорт в PDF выполняется отдельно.
+Для пересборки графиков и версий статей в Word установите дополнительные зависимости: `python -m pip install -e ".[publication]"`. Затем запустите `python scripts/render_figures.py` и `python scripts/build_publications.py`. Редактируемые версии сохраняются в `outputs/publications`; можно выбрать `--target ssrn` или `--target ssrn-ru`. Экспорт в PDF выполняется отдельно.
 
 ## Источники
 

@@ -5,6 +5,7 @@ Requires python-docx. PDF export and layout review are separate release steps.
 """
 from __future__ import annotations
 
+import argparse
 import re
 from pathlib import Path
 
@@ -51,7 +52,7 @@ def frac(numerator, denominator):
 
 
 def math_sequence(text):
-    pattern = re.compile(r"(CFADS|FCF|DSCR|rbar|lambda|yhat|[A-Za-z])_(?:\(([^)]+)\)|([A-Za-z0-9]+))")
+    pattern = re.compile(r"(CFADS|FCF|DSCR|Tax|rbar|lambda|yhat|[A-Za-z])_(?:\(([^)]+)\)|([A-Za-z0-9]+))")
     seq, pos = [], 0
     for match in pattern.finditer(text):
         if match.start() > pos:
@@ -114,7 +115,7 @@ INLINE = re.compile(r"(\[[^\]]+\]\(https?://[^)]+\)|\*\*[^*]+\*\*|`[^`]+`)")
 
 def plain_run(paragraph, text, **kwargs):
     # Format simple variable subscripts in running prose without raw notation.
-    variable = re.compile(r"\b(CFADS|FCF|DSCR|rbar|lambda|yhat|[A-Za-z])_(?:\(([^)]+)\)|([A-Za-z0-9]+))")
+    variable = re.compile(r"\b(CFADS|FCF|DSCR|Tax|rbar|lambda|yhat|[A-Za-z])_(?:\(([^)]+)\)|([A-Za-z0-9]+))")
     pos = 0
     for match in variable.finditer(text):
         if match.start() > pos:
@@ -158,11 +159,16 @@ def add_table(doc, lines):
     table.autofit = False
     total = 6.8
     if n == 5:
-        widths = [1.08, 1.25, 1.52, 1.3, 1.65]
+        widths = [1.30, 1.25, 1.52, 1.3, 1.43] if rows[0][0] == "Сценарий" else [1.08, 1.25, 1.52, 1.3, 1.65]
     elif n == 4:
-        widths = [2.3, 1.8, 1.3, 1.4] if "Regime" in rows[0][0] else [2.6, 1.35, 1.35, 1.5]
+        widths = [2.3, 1.8, 1.3, 1.4] if rows[0][0] in {"Regime", "Режим"} else [2.6, 1.35, 1.35, 1.5]
     elif n == 3:
-        widths = [1.55, 2.55, 2.7] if len(rows) > 6 else [3.3, 1.75, 1.75]
+        if any("results/" in cell for row in rows for cell in row):
+            widths = [1.55, 2.8, 2.45]
+        elif len(rows) > 6:
+            widths = [2.2, 2.9, 1.7]
+        else:
+            widths = [3.3, 1.75, 1.75]
     else:
         widths = [2.25, 4.55] if n == 2 else [total/n]*n
     for col, width in zip(table.columns, widths):
@@ -199,7 +205,7 @@ def build(source, target, language):
     section.page_width = Inches(8.5); section.page_height = Inches(11)
     section.top_margin = Inches(.78); section.bottom_margin = Inches(.75)
     section.left_margin = Inches(.85); section.right_margin = Inches(.85)
-    family = "Liberation Serif" if language == "en" else "Liberation Sans"
+    family = "Liberation Serif" if source.name.startswith("ssrn_") else "Liberation Sans"
     normal = doc.styles["Normal"]
     normal.font.name = family; normal.font.size = Pt(11)
     normal.paragraph_format.line_spacing = 1.08
@@ -229,8 +235,10 @@ def build(source, target, language):
             code = not code; language_tag = line[3:]; i += 1; continue
         if code:
             p = doc.add_paragraph()
-            p.paragraph_format.space_after = Pt(0); p.paragraph_format.line_spacing = 1.05
-            p.paragraph_format.keep_with_next = i+1 < len(lines) and not lines[i+1].startswith("```")
+            continues = i+1 < len(lines) and not lines[i+1].startswith("```")
+            p.paragraph_format.space_after = Pt(0 if continues else 7)
+            p.paragraph_format.line_spacing = 1.05
+            p.paragraph_format.keep_with_next = continues
             r = p.add_run(line); r.font.name = "DejaVu Sans Mono"; r.font.size = Pt(8.4)
             i += 1; continue
         if not line.strip():
@@ -245,7 +253,7 @@ def build(source, target, language):
             p = doc.add_paragraph(); p.paragraph_format.keep_with_next = True
             p.add_run().add_picture(str(source.parent / image[2]), width=Inches(6.8))
             following = next((x for x in lines[i+1:] if x.strip()), "")
-            if not following.startswith("**Figure "):
+            if not following.startswith(("**Figure ", "**Рисунок ")):
                 cap = doc.add_paragraph(image[1]); cap.paragraph_format.space_after = Pt(9)
                 for run in cap.runs: run.font.size=Pt(9); run.italic=True
             i += 1; continue
@@ -259,17 +267,23 @@ def build(source, target, language):
             level = 2 if line.startswith("### ") else 1
             heading = line[level+2:]
             heading = heading.replace(":", " ").replace("—", " ")
-            heading = re.sub(r"^\d+(?:\.\d+)*\.?\s+", "", heading)
             doc.add_heading(heading, level=level)
             i += 1; continue
         equation = re.fullmatch(r"`([^`]+)`[.,]?", line)
-        if language == "en" and equation and "=" in equation[1]:
+        if equation and "=" in equation[1]:
             add_equation(doc, equation[1]); i += 1; continue
         if line.startswith("- "):
             p = doc.add_paragraph(style="List Bullet"); add_inline(p, line[2:]); i += 1; continue
         p = doc.add_paragraph()
         add_inline(p, line)
-        if line in ("**Dmitry Kazakov**", "**Дмитрий Казаков**", "24 October 2026"):
+        if line.startswith(("**Table ", "**Таблица ")):
+            p.paragraph_format.keep_with_next = True
+            p.paragraph_format.space_after = Pt(4)
+        if line.startswith(("**Figure ", "**Рисунок ")):
+            p.paragraph_format.keep_together = True
+            for run in p.runs:
+                run.font.size = Pt(9.5)
+        if line in ("**Dmitry Kazakov**", "**Дмитрий Казаков**", "24 October 2026", "dmkkazakov@gmail.com"):
             p.paragraph_format.space_after = Pt(5)
         if line.startswith("[1]") or (line.startswith("[") and "] " in line[:6]):
             p.paragraph_format.space_after = Pt(5)
@@ -280,10 +294,21 @@ def build(source, target, language):
             for run_element in p._p.xpath(".//w:r"):
                 Run(run_element, p).font.size = Pt(9.5)
         i += 1
+    target.parent.mkdir(parents=True, exist_ok=True)
     doc.save(target)
     print(target)
 
 
 if __name__ == "__main__":
-    build(PUB / "habr_article.md", PUB / "Infra_Cashflow_Habr_Dmitry_Kazakov.docx", "ru")
-    build(PUB / "ssrn_paper.md", PUB / "Infra_Cashflow_SSRN_Dmitry_Kazakov.docx", "en")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--target", choices=("all", "habr", "ssrn", "ssrn-ru"), default="all")
+    parser.add_argument("--output-dir", type=Path, default=ROOT / "outputs/publications")
+    args = parser.parse_args()
+    manuscripts = {
+        "habr": ("habr_article.md", "Infra_Cashflow_Habr_Dmitry_Kazakov.docx", "ru"),
+        "ssrn": ("ssrn_paper.md", "Infra_Cashflow_SSRN_Dmitry_Kazakov.docx", "en"),
+        "ssrn-ru": ("ssrn_paper_ru.md", "Infra_Cashflow_SSRN_Dmitry_Kazakov_RU.docx", "ru"),
+    }
+    for name, (source, output, language) in manuscripts.items():
+        if args.target in ("all", name):
+            build(PUB / source, args.output_dir / output, language)
