@@ -138,7 +138,7 @@
             "minimum": 0
           }
         },
-        "additionalProperties": true,
+        "additionalProperties": false,
         "not": {
           "anyOf": [
             {
@@ -213,7 +213,7 @@
             "minimum": 0
           }
         },
-        "additionalProperties": true,
+        "additionalProperties": false,
         "dependentRequired": {
           "debt_draw": [
             "interest"

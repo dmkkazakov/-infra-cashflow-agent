@@ -70,6 +70,48 @@ class HarnessTests(unittest.TestCase):
         with self.assertRaises(HarnessError):
             self.harness().run()
 
+    def test_cached_run_becomes_latest_after_another_run(self):
+        first = self.harness(horizon=12)
+        first_result = first.run()
+        second = self.harness(horizon=24)
+        second.run()
+        latest_path = Path(self.temporary.name) / "latest.json"
+        self.assertEqual(json.loads(latest_path.read_text())["run_id"], second.run_id)
+        calls_before_cache_hit = self.forecast.call_count
+
+        cached = self.harness(horizon=12).run()
+
+        self.assertEqual(cached, first_result)
+        self.assertEqual(self.forecast.call_count, calls_before_cache_hit)
+        latest = json.loads(latest_path.read_text())
+        self.assertEqual(latest["run_id"], first.run_id)
+        self.assertEqual(latest["report"], f"{first.run_id}/report.json")
+
+    def test_successful_retry_removes_previous_failure_marker(self):
+        failed_planner = Mock(model="mock-model", endpoint="https://example.test/v1/chat/completions")
+        failed_planner.next_action.return_value = response("shell", {}, "rejected")
+        failed = self.harness(planner=failed_planner)
+        with self.assertRaises(HarnessError):
+            failed.run()
+        failure_path = failed.output_path / "failure.json"
+        self.assertTrue(failure_path.exists())
+
+        planner = Mock(model="mock-model", endpoint="https://example.test/v1/chat/completions")
+        planner.next_action.side_effect = [
+            response("diagnose_driver", {"driver": "rate"}, "a"),
+            response("run_scenario", {"scenario": "stress"}, "b"),
+            response("run_scenario", {"scenario": "downside"}, "c"),
+            response("finalize", {}, "d"),
+        ]
+        retry = self.harness(planner=planner)
+        self.assertEqual(retry.run_id, failed.run_id)
+
+        result = retry.run()
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(json.loads((retry.output_path / "manifest.json").read_text())["status"], "complete")
+        self.assertFalse(failure_path.exists())
+
     def test_invalid_cash_identity_prevents_success_artifact(self):
         broken = fixture_report()
         broken["monthly"][0]["closing_cash"] += 1

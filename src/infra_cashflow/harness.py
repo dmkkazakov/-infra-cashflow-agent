@@ -413,7 +413,9 @@ class ForecastHarness:
                     artifact = self.output_path / name
                     if artifact.is_symlink() or hashlib.sha256(artifact.read_bytes()).hexdigest() != expected_digest:
                         raise HarnessError("Existing artifact digest does not match its manifest.")
-                return json.loads((self.output_path / "report.json").read_text(encoding="utf-8"))
+                result = json.loads((self.output_path / "report.json").read_text(encoding="utf-8"))
+                self._publish_success()
+                return result
         try:
             validation = validate_project({**self.project, "as_of": self.as_of})
             self._event("validate_project", result=validation)
@@ -488,9 +490,14 @@ class ForecastHarness:
                     "input_sha256": self.input_hash, "configuration": self.run_config,
                     "artifact_sha256": artifact_hashes}
         _atomic_write(self.output_path, "manifest.json", canonical_json(manifest, pretty=True) + "\n")
+        self._publish_success()
+
+    def _publish_success(self) -> None:
+        """Point to the successful run, including cache hits and recovered attempts."""
         _atomic_write(self.output_parent, "latest.json", canonical_json({
             "run_id": self.run_id, "relative_directory": self.run_id,
             "report": f"{self.run_id}/report.json"}, pretty=True) + "\n")
+        (self.output_path / "failure.json").unlink(missing_ok=True)
 
 
 def _format(value: Any) -> str:

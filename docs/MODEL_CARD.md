@@ -2,7 +2,7 @@
 
 ## Intended use
 
-Version 0.1.1 is a research prototype for analysing monthly infrastructure-project cash flows. It forecasts a supplied schedule, estimates recent component deviations, evaluates fixed assumptions, and reports unmet financing needs. It is not a deployed treasury system or an estimate of default probability.
+Version 0.1.2 is a research prototype for analysing monthly infrastructure-project cash flows. It forecasts a supplied schedule, estimates recent component deviations, evaluates fixed assumptions, and reports unmet financing needs. It is not a deployed treasury system or an estimate of default probability.
 
 Author: Dmitry Kazakov. No employer or university is identified as endorsing the work.
 
@@ -34,7 +34,7 @@ P10/P50/P90 are percentiles of the conditional model distribution. A pointwise p
 
 ## Evaluation
 
-The released experiment uses seeds 1 through 12 on a common 84-month synthetic template. Four seeds have an unbiased noisy plan, four persistent component bias, and four an operating-regime reversal. The minimum training history is 12 months. There are 70 rolling forecast origins per seed and three targets per origin: 840 origins and 2,520 origin-target pairs. Adjacent windows overlap.
+The released experiment uses seeds 1 through 12 on a common 84-month synthetic template. Four seeds have an unbiased noisy plan, four persistent component bias, and four an operating-regime reversal. The minimum training history is 12 months. There are 70 rolling forecast origins per seed and three targets per origin: 840 origins and 2,520 origin-target pairs. Adjacent windows overlap. Reference artifacts retain their original version 0.1.1 provenance; version 0.1.2 changes cache and retry handling without changing the financial formulas or experimental results.
 
 The target is free cash flow before financing. Pooled MAE is 20.677587 million RUB for the unchanged plan, 24.374843 for last observation, and 10.291092 for the corrected plan. Correction improves 8 cases and worsens 4. These are executed simulation results, not externally validated business effects. There is no hypothesis-test significance claim and no measured incremental forecasting benefit of the LLM planner.
 
@@ -44,9 +44,11 @@ All future actual rows are removed before fitting and state reconstruction. The 
 
 ## Implementation verification
 
-68 unit tests passed on the release implementation, including hand-calculated cash/DSCR cases, nonrevolving headroom, facility expiry, exact recorded principal, future-observation invariance, delayed-tail conservation, horizon validation, unsafe tool rejection and mocked model transport. A wheel was built and its demo run outside the source checkout. The live model provider path was not exercised.
+70 unit tests passed on version 0.1.2, including hand-calculated cash/DSCR cases, nonrevolving headroom, facility expiry, exact recorded principal, future-observation invariance, delayed-tail conservation, horizon validation, unsafe tool rejection and mocked model transport. Two regression tests cover the latest-result pointer after a cache hit and removal of a stale failure marker after a successful retry. Version 0.1.1 was also built as a wheel and its demo run outside the source checkout. A live language-model provider has not been tested.
 
 Every central scenario ledger receives independent reconciliation. Simulation paths use the same financial identities in a vectorised implementation; an independent audit of every stochastic path is not claimed. SHA-256 manifests detect alteration relative to the retained manifest; they are not signed records and cannot prevent an actor replacing both files and manifest.
+
+A complete adapter-to-harness cycle was also exercised against a local HTTP server with scripted responses. An early finalization request was rejected; the required scenarios, a rate sensitivity and report persistence completed successfully. This checks the integration contract, not the decision quality of a live language model.
 
 ## Practical limits
 
