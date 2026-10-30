@@ -6,7 +6,7 @@ Monthly infrastructure-project cash-flow forecasting: operating receipts, expend
 
 A project can earn money over its lifetime and run out of cash during construction. Contractors rarely accept a positive NPV in settlement of an invoice. This prototype therefore follows each month's cash balance, including the timing and limits of financing.
 
-**Dmitry Kazakov | Version 0.1.3**
+**Dmitry Kazakov | NEIMARK University, Nizhny Novgorod, Russia | Version 0.1.3**
 
 The repository contains the implementation, a synthetic project, reproducible experimental results and research manuscripts. It is a research prototype. Forecast accuracy on real infrastructure projects and the decision quality of a live language-model planner have not been established.
 
@@ -176,12 +176,12 @@ GitHub stores the code and runs verification on pushes and pull requests. This r
 ## Publications and documentation
 
 - [Publication index and version notes](docs/publications/README.md).
-- [English working paper prepared for SSRN](docs/publications/ssrn_paper.md) and [English PDF](docs/publications/Infra_Cashflow_SSRN_Dmitry_Kazakov.pdf).
+- [English working paper](docs/publications/ssrn_paper.md) and [English PDF](docs/publications/Infra_Cashflow_SSRN_Dmitry_Kazakov.pdf).
 - [Russian companion manuscript](docs/publications/ssrn_paper_ru.md) and [Russian PDF](docs/publications/Infra_Cashflow_SSRN_Dmitry_Kazakov_RU.pdf).
 - [Russian Habr article on cash flow and the experience with the harness](docs/publications/habr_article.md).
 - [Model card](docs/MODEL_CARD.md), [data dictionary](docs/DATA_DICTIONARY.md) and [JSON Schema](docs/project.schema.json).
 
-The manuscripts are available in this repository. Preparation for SSRN does not mean that SSRN has accepted or posted the paper; no SSRN identifier or DOI has been assigned here.
+The paper was posted on SSRN on 30 October 2026: [SSRN 7666020](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7666020), DOI **10.2139/ssrn.7666020**. SSRN posting is not peer review. Revised repository PDFs include the current author affiliation; replacing SSRN-hosted files requires an authenticated author revision.
 
 Source code is in `src/infra_cashflow`, tests in `tests`, example data in `examples`, and reproduction scripts in `scripts`.
 

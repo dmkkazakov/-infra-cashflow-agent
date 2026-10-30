@@ -4,9 +4,13 @@
 
 **Dmitry Kazakov**
 
+NEIMARK University, Nizhny Novgorod, Russia
+
 dmkkazakov@gmail.com
 
-Working paper. Revised 24 October 2026.
+Working paper. Research revision 24 October 2026; affiliation updated 30 October 2026.
+
+SSRN: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7666020. DOI: 10.2139/ssrn.7666020.
 
 ## Abstract
 
@@ -310,3 +314,4 @@ The two supplementary audit scripts were added with this manuscript revision. Th
 | Continuous integration | .github/workflows/tests.yml | Tests, saved-result audit, fresh forecast, backtest and supplementary audits |
 
 Reproducing a calculation confirms the recorded computation. It does not establish whether the source assumptions match a particular asset, whether a real forecast interval is calibrated, or whether a live planner makes useful decisions.
+

@@ -15,9 +15,9 @@ Research manuscripts for Infra Cashflow Agent 0.1.3, revised 24 October 2026. Th
 - [Инструкция и готовые поля подачи](SSRN_SUBMISSION.md).
 - [Machine-readable submission metadata](submission_metadata.json).
 
-The English PDF is intended for SSRN. The Russian version is a companion for readers. The package has not been submitted to SSRN and has no claimed SSRN DOI or acceptance. Author details and declarations to confirm at submission are listed in the instructions.
+The paper was posted on SSRN on 30 October 2026: [SSRN 7666020](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7666020), DOI **10.2139/ssrn.7666020**. The public record was checked on 30 October 2026. SSRN posting is not peer review.
 
-Для SSRN предназначен английский PDF. Русская версия подготовлена для читателей. Пакет не подан в SSRN; присвоение DOI и принятие площадкой не заявляются. Реквизиты и декларации, которые автор уточняет при подаче, перечислены в инструкции.
+Статья размещена в SSRN 30 октября 2026 года. Аффилиация в рукописях репозитория обновлена 30 октября: NEIMARK University, Nizhny Novgorod, Russia. Для замены PDF на SSRN требуется вход автора. Числа эксперимента и версия расчётного кода не менялись.
 
 ## Code and evidence / Код и результаты
 
@@ -31,3 +31,4 @@ The English PDF is intended for SSRN. The Russian version is a companion for rea
 The frozen results retain their original 0.1.1 provenance. The manuscript explains how version 0.1.3 was checked against them. Numerical claims concern synthetic data; neither real-project forecasting accuracy nor a live language-model planner was evaluated.
 
 Эталонные результаты сохраняют исходное происхождение из версии 0.1.1. В статье объясняется их сверка с версией 0.1.3. Численные выводы относятся к синтетическим данным; точность на реальных проектах и работа живой языковой модели как планировщика не оценивались.
+

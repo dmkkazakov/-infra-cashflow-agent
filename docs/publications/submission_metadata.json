@@ -24,14 +24,15 @@
   "author": {
     "name": "Dmitry Kazakov",
     "email": "dmkkazakov@gmail.com",
-    "affiliation": null
+    "affiliation": "NEIMARK University, Nizhny Novgorod, Russia",
+    "orcid": "https://orcid.org/0009-0002-6670-3705"
   },
   "funding": null,
   "conflicts_of_interest": null,
   "ai_disclosure": "OpenAI GPT-6 Astra Pro assisted with literature discovery, software implementation, test development, computational verification support, drafting, editing and translation. Its contribution was substantial. Reported numerical results come from the executable synthetic experiment and the specified arithmetic checks, not from free-form language-model forecasts. The author is responsible for the final manuscript, interpretations and submission. No claim is made that the forecast benchmark evaluated a live language-model planner.",
-  "ssrn_submission_status": "not_submitted",
-  "ssrn_url": null,
-  "ssrn_doi": null,
+  "ssrn_submission_status": "posted",
+  "ssrn_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7666020",
+  "ssrn_doi": "10.2139/ssrn.7666020",
   "files": {
     "english_manuscript": "ssrn_paper.md",
     "russian_companion": "ssrn_paper_ru.md",
@@ -40,13 +41,14 @@
   },
   "code_snapshot": "2fa489170fb4e0700069e6369e80853d221c7cfe",
   "notes": {
-    "affiliation": "Current institutional affiliation requires author confirmation and must be added consistently to the PDF and submission profile before submission.",
+    "affiliation": "Current academic affiliation confirmed by the author and the public NEIMARK expert page; applied consistently to both repository manuscripts.",
     "funding": "Requires author confirmation at submission; null does not assert absence of funding.",
     "conflicts_of_interest": "Requires author confirmation at submission; null does not assert absence of competing interests.",
     "author_review": "The author must review the final manuscript and confirm authorship, accuracy and rights when submitting.",
     "language": "The English PDF is intended for SSRN. The Russian text and PDF are companion versions for readers.",
     "metadata_consistency": "Title, subtitle, abstract, keywords, JEL codes and AI disclosure are copied from ssrn_paper.md. Keep the PDF and submission fields aligned when revising.",
-    "provenance": "Software version 0.1.3; frozen results retain version 0.1.1 provenance as explained in the manuscript. No SSRN posting, DOI or peer review is claimed."
+    "provenance": "Software version 0.1.3; frozen results retain version 0.1.1 provenance. SSRN posting verified on 30 October 2026. Posting does not establish peer review.",
+    "repository_pdf_revision": "Affiliation update dated 30 October 2026; replacement of the SSRN-hosted PDF requires authenticated submission."
   },
   "policy_sources": {
     "submission_guidelines": "https://www.elsevier.support/ssrn/answer/get-started",
@@ -56,5 +58,7 @@
     "pdf_requirements": "https://www.elsevier.support/ssrn/answer/pdf-issues",
     "classifications": "https://www.elsevier.support/ssrn/answer/classification-distribution",
     "submission_form_guide": "https://supportcontent.elsevier.com/Support%20Hub/SSRN/SSRN_NewSubmissionForm.pdf"
-  }
+  },
+  "posted_date": "2026-10-30",
+  "metadata_verified_date": "2026-10-30"
 }

@@ -6,7 +6,7 @@
 
 Проект может хорошо зарабатывать за весь срок жизни и остаться без денег посреди стройки. Подрядчик, к сожалению, не принимает оплату положительным NPV. Поэтому здесь важен каждый месяц, а не только итоговая сумма.
 
-**Дмитрий Казаков · версия 0.1.3**
+**Дмитрий Казаков · Университет НЕЙМАРК, Нижний Новгород, Россия · версия 0.1.3**
 
 В репозитории код, синтетический проект, результаты расчётов и статьи с разбором метода. Это исследовательский прототип; на реальных проектах точность пока не проверялась.
 
@@ -146,10 +146,12 @@ python -m infra_cashflow run examples/demo_project.json --mode llm --allow-netwo
 
 ## Статьи и документация
 
+Статья размещена в SSRN 30 октября 2026 года: [SSRN 7666020](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7666020), DOI **10.2139/ssrn.7666020**. Размещение не означает научного рецензирования.
+
 - [Русская статья: cash flow и первый опыт с harness](docs/publications/habr_article.md).
 - [Английская исследовательская рукопись](docs/publications/ssrn_paper.md), [PDF](docs/publications/Infra_Cashflow_SSRN_Dmitry_Kazakov.pdf).
 - [Русская версия исследования](docs/publications/ssrn_paper_ru.md), [PDF](docs/publications/Infra_Cashflow_SSRN_Dmitry_Kazakov_RU.pdf).
-- [Все публикационные материалы и статус подготовки к SSRN](docs/publications/README.md).
+- [Все публикационные материалы и статус SSRN](docs/publications/README.md).
 - [Формат данных](docs/DATA_DICTIONARY.md) и [JSON Schema](docs/project.schema.json).
 - [Описание модели и её ограничений](docs/MODEL_CARD.md).
 
